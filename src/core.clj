@@ -2,22 +2,14 @@
   (:require [camel-snake-kebab.core :as csk]
             [clj-http.client :as client]
             [cheshire.core :as json]
-            [clojure.spec.alpha :as s]))
+            [clojure.spec.alpha :as s]
+            [clojure.spec.gen.alpha :as gen]
+            [clojure.test.check :as tc]
+            [clojure.test.check.generators :as tcgen]
+            [orchestra.spec.test :as st]
+            [clojure.test.check.properties :as prop :include-macros true]))
 
 (def api-key (slurp "api.key"))
-
-(def test-response-1 (client/get "http://www.giantbomb.com/api/game/3030-4725/"
-                                 {:headers {"User-Agent" "Kayla's testing bot"}
-                                  :query-params {"api_key" api-key
-                                                 "format" "json"}
-                                  :throw-entire-message? true}))
-#_(println test-response-1)
-
-(def parsed-response-1
-  (-> test-response-1
-      :body
-      (json/parse-string csk/->kebab-case-keyword)))
-
 
 (s/def ::status-code #{1 100 101 102 103 104 105})
 (s/def ::error string?)
@@ -27,51 +19,15 @@
 (s/def ::offset int?)
 (s/def ::results any?)
 
-#_(s/valid? ::game parsed-response-1)
-
-#_(def test-response-2
-  (client/get
-   "http://www.giantbomb.com/api/game/3030-4725/"
-   {:headers {"User-Agent" "Kayla's testing bot"}
-    :query-params {"format" "json"
-                   "field_list" "generes,name"
-                   "api_key" api-key}}))
-
-#_(def parsed-response-2
-  (-> test-response-2
-      :body
-      (json/parse-string csk/->kebab-case-keyword)))
-
-#_(s/valid? ::game parsed-response-2)
-
-#_(defn test-request-3 [resource-type resource-id response-data-format resource-fileds]
-  (client/get (format "http://www.giantbomb.com/api/%s/%s/?api_key=%s&format=%s&field_list=%s"
-                      resource-type
-                      resource-id)
-              {:headers {"User-Agent" "Kayla's testing bot"}
-               :query-params {"api_key" api-key
-                              "format" response-data-format
-                              "field_list" (s/join "," resource-fields)}}))
-
-#_(def test "https://www.giantbomb.com/api/game/3030-4725/?api_key=ca693dbbae4199a0a9a1f639945883e4fef0f47a&format=json&field_list=genres,name")
-
-
-#_(defn response-spec [results-spec]
-  (s/keys :req-un [::status-code
-                   ::error
-                   ::number-of-total-results
-                   ::number-of-page-results
-                   ::limit
-                   ::offset
-                   ::results]))
-
 ;;todo: flush out these specs
 (s/def ::date-string string?) "2007-08-28"
 (s/def ::date-time-string string?) "2017-12-02 18:31:43"
 (s/def ::year-string string?)
 (s/def ::month-string string?)
 
-(s/def ::url string?)
+;;todo: add generator?
+;;todo: this probably fails in a very ugly way, and needs a try around it
+(s/def ::url #(uri? (new java.net.URI %)))
 
 (s/def ::api-detail-url ::url)
 (s/def ::id pos-int?)
@@ -120,47 +76,53 @@
 
 
 ;;List of aliases the game is known by. A \n (newline) seperates each alias.
-(s/def :game/aliases string?)
+(s/def :game/aliases (s/nilable string?))
 ;;URL pointing to the game detail resource.
 (s/def :game/api-details-url ::api-detail-url)
 ;;Characters related to the game.
-(s/def :game/characters (s/coll-of ::link))
+(s/def :game/characters (s/nilable (s/coll-of ::link)))
 ;;Concepts related to the game.
-(s/def :game/concepts (s/coll-of ::link))
+(s/def :game/concepts (s/nilable (s/coll-of ::link)))
 ;;Date the game was added to Giant Bomb.
 (s/def :game/date-added ::date-time-string)
 ;;Date the game was last updated on Giant Bomb.
 (s/def :game/date-last-updated ::date-time-string) 
 ;;Brief summary of the game.
-(s/def :game/deck string?)
+(s/def :game/deck (s/nilable string?))
 ;;Description of the game.
-(s/def :game/description string?)
+(s/def :game/description (s/nilable string?))
 ;;Companies who developed the game.
-(s/def :game/developers (s/coll-of ::link))
+(s/def :game/developers (s/nilable (s/coll-of ::link)))
 ;;Expected day of release. The month is represented numerically. Combine with 'expected_release_day', 'expected_release_month', 'expected_release_year' and 'expected_release_quarter' for Giant Bomb's best guess release date of the game. These fields will be empty if the 'original_release_date' field is set.
-(s/def :game/expected-release-day (s/nilable ::date-string)) ;;?? has not been observed
+(s/def :game/expected-release-day (s/nilable nat-int?))
 ;;Expected month of release. The month is represented numerically. Combine with 'expected_release_day', 'expected_release_quarter' and 'expected_release_year' for Giant Bomb's best guess release date of the game. These fields will be empty if the 'original_release_date' field is set.
-(s/def :game/expected-release-month (s/nilable ::month-string)) ;;?? has not been observed
+(s/def :game/expected-release-month (s/nilable nat-int?))
 ;;Expected quarter of release. The quarter is represented numerically, where 1 = Q1, 2 = Q2, 3 = Q3, and 4 = Q4. Combine with 'expected_release_day', 'expected_release_month' and 'expected_release_year' for Giant Bomb's best guess release date of the game. These fields will be empty if the 'original_release_date' field is set.
-(s/def :game/expected-release-quarter (s/nilable #{1 2 3 4})) ;;?? has not been observed
+(s/def :game/expected-release-quarter (s/nilable #{1 2 3 4}))
 ;;Expected year of release. Combine with 'expected_release_day', 'expected_release_month' and 'expected_release_quarter' for Giant Bomb's best guess release date of the game. These fields will be empty if the 'original_release_date' field is set.
-(s/def :game/expected-release-year (s/nilable ::year-string)) ;;?? has not been observed
+(s/def :game/expected-release-year (s/nilable nat-int?))
 ;;Characters that first appeared in the game.
-(s/def :game/first-appearance-characters (s/coll-of ::link))
+(s/def :game/first-appearance-characters (s/nilable (s/coll-of ::link)))
 ;;Concepts that first appeared in the game.
-(s/def :game/first-appearance-concepts (s/coll-of ::link))
+(s/def :game/first-appearance-concepts (s/nilable (s/coll-of ::link)))
 ;;Locations that first appeared in the game.
-(s/def :game/first-appearance-locations (s/coll-of ::link))
+(s/def :game/first-appearance-locations (s/nilable (s/coll-of ::link)))
 ;;Objects that first appeared in the game.
-(s/def :game/first-appearance-objects (s/coll-of ::link))
+(s/def :game/first-appearance-objects (s/nilable (s/coll-of ::link)))
 ;;People that were first credited in the game.
-(s/def :game/first-appearance-people (s/coll-of ::link))
+(s/def :game/first-appearance-people (s/nilable (s/coll-of ::link)))
 ;;Franchises related to the game.
-(s/def :game/franchises (s/coll-of ::link))
+(s/def :game/franchises (s/nilable (s/coll-of ::link)))
 ;;Genres that encompass the game.
-(s/def :game/genres (s/coll-of ::link))
+(s/def :game/genres (s/coll-of ::link)) ;;probably nilable
+
 ;;For use in single item api call for game.
-(s/def :game/guid string?) ;;"3030-4725" maybe make this one a set? or a specific spec for hyphonated numbers
+;;they might just be 4 digits + 4-5 digits, that's all i've observed (out of 4)
+;;it very likely goes higher than 7000, i'm just not sure how much higher. Also I am not certain
+;;about the completeness, but we'll find out soon enough
+(s/def :game/guid (s/with-gen #(re-matches #"3030-\d+" %)
+                    #(tcgen/no-shrink (gen/fmap (partial str "3030-") (gen/large-integer* {:min 1 :max 70000})))))
+
 ;;Unique ID of the game.
 (s/def :game/id ::id)
 ;;Main image of the game.
@@ -176,21 +138,21 @@
 ;;Characters killed in the game.
 (s/def :game/killed-characters (s/nilable (s/coll-of ::link))) ;;?? has not been observed
 ;;Locations related to the game.
-(s/def :game/locations (s/coll-of ::link))
+(s/def :game/locations (s/nilable (s/coll-of ::link)))
 ;;Name of the game.
 (s/def :game/name string?)
 ;;Number of user reviews of the game on Giant Bomb.
 (s/def :game/number-of-user-reviews nat-int?)
 ;;Objects related to the game.
-(s/def :game/objects (s/coll-of ::link))
+(s/def :game/objects (s/nilable (s/coll-of ::link)))
 ;;Rating of the first release of the game.
-(s/def :game/original-game-rating (s/coll-of (s/keys :req-un [::api-detail-url
-                                                              ::id
-                                                              ::name])))
+(s/def :game/original-game-rating (s/nilable (s/coll-of (s/keys :req-un [::api-detail-url
+                                                                         ::id
+                                                                         ::name]))))
 ;;Date the game was first released.
-(s/def :game/original-release-date ::date-string)
+(s/def :game/original-release-date (s/nilable ::date-string))
 ;;People who have worked with the game.
-(s/def :game/people (s/coll-of ::link))
+(s/def :game/people (s/nilable (s/coll-of ::link)))
 
 ;;Platforms the game appeared in.
 (s/def :platforms/abbreviation string?)
@@ -201,7 +163,7 @@
                                                    :platforms/abbreviation])))
 
 ;;Companies who published the game.
-(s/def :game/publishers (s/coll-of ::link))
+(s/def :game/publishers (s/nilable (s/coll-of ::link)))
 ;;Releases of the game.
 (s/def :game/releases (s/coll-of ::link))
 ;;Game DLCs
@@ -209,7 +171,7 @@
 ;;Staff reviews of the game.
 (s/def :game/reviews (s/coll-of string?))
 ;;Other games similar to the game.
-(s/def :game/similar-games (s/coll-of ::link))
+(s/def :game/similar-games (s/nilable (s/coll-of ::link)))
 ;;URL pointing to the game on Giant Bomb.
 (s/def :game/site-detail-url ::site-detail-url)
 ;;Themes that encompass the game.
@@ -218,46 +180,48 @@
 (s/def :game/videos (s/nilable (s/coll-of any?))) ;;?? has not been observed
 
 (s/def :game/results
-  (s/keys :req-un [:game/description
-                   :game/killed-characters
-                   :game/first-appearance-objects
-                   :game/characters
-                   :game/original-game-rating
-                   :game/objects
-                   :game/image-tags
-                   :game/images
-                   :game/first-appearance-characters
-                   :game/name
-                   :game/deck
-                   :game/genres
-                   :game/first-appearance-concepts
-                   :game/videos
-                   :game/publishers
-                   :game/franchises
-                   :game/original-release-date
-                   :game/expected-release-month
-                   :game/similar-games
-                   :game/date-last-updated
-                   :game/themes
-                   :game/first-appearance-people
-                   :game/api-detail-url
-                   :game/locations
-                   :game/developers
-                   :game/number-of-user-reviews
-                   :game/concepts
-                   :game/expected-release-quarter
-                   :game/first-appearance-locations
-                   :game/releases
-                   :game/id
-                   :game/expected-release-year
-                   :game/site-detail-url
-                   :game/image
-                   :game/aliases
-                   :game/date-added
-                   :game/expected-release-day
-                   :game/people
-                   :game/platforms
-                   :game/guid]))
+  (s/or :empty empty?
+        :not-empty
+        (s/keys :req-un [:game/description
+                         :game/killed-characters
+                         :game/first-appearance-objects
+                         :game/characters
+                         :game/original-game-rating
+                         :game/objects
+                         :game/image-tags
+                         :game/images
+                         :game/first-appearance-characters
+                         :game/name
+                         :game/deck
+                         :game/genres
+                         :game/first-appearance-concepts
+                         :game/videos
+                         :game/publishers
+                         :game/franchises
+                         :game/original-release-date
+                         :game/expected-release-month
+                         :game/similar-games
+                         :game/date-last-updated
+                         :game/first-appearance-people
+                         :game/api-detail-url
+                         :game/locations
+                         :game/developers
+                         :game/number-of-user-reviews
+                         :game/concepts
+                         :game/expected-release-quarter
+                         :game/first-appearance-locations
+                         :game/id
+                         :game/expected-release-year
+                         :game/site-detail-url
+                         :game/image
+                         :game/aliases
+                         :game/date-added
+                         :game/expected-release-day
+                         :game/people
+                         :game/platforms
+                         :game/guid]
+                :opt-un [:game/releases
+                         :game/themes])))
 
 (s/def ::game (s/keys :req-un [::status-code
                                ::error
@@ -267,7 +231,56 @@
                                ::offset
                                :game/results]))
 
-(s/explain ::game parsed-response-1)
-(s/valid? ::game parsed-response-1)
+{:error Object Not Found, :limit 0, :offset 0, :number-of-page-results 0, :number-of-total-results 0, :status-code 101, :results []}
 
-;;people, image, releases, first-appearance-locations, 
+(s/fdef get-game :args (s/cat :guid :game/guid))
+
+(defn get-game [guid]
+  (println "getting: " guid)
+  (client/get (format "http://www.giantbomb.com/api/game/%s/" guid)
+              {#_#_:debug true
+               :headers {"User-Agent" "Kayla's testing bot"}
+               :query-params {"api_key" api-key
+                              "format" "json"}
+               :throw-entire-message? true}))
+
+;; lets not get rate limited, their docs said something like 200 requests per hour and
+;; we're going to be SUPER respectful of that, since generative testing could very easily
+;; surpass that, and ideally should if we were being sort of thorough, but this is more a
+;; proof of concept than a genuine bonified attempt to test their endpoint.
+
+(def get-game-memo (memoize get-game))
+
+(s/fdef parse-response :ret ::game)
+
+(defn parse-response [response]
+  (-> response
+      :body
+      (json/parse-string csk/->kebab-case-keyword)))
+
+;; manual test games
+(def game-ids ["3030-4725"
+               "3030-20645"
+               "3030-30057"
+               "3030-44272"
+               "3030-43393"
+               "3030-68921"
+               "3030-18741"
+               "3030-20232"
+               "3030-19783"
+               "3030-69447"
+               "3030-20815"
+               "3030-22195"
+               "3030-1539"])
+
+(st/instrument)
+
+(def guid-is-returned-prop
+  (prop/for-all [guid (s/gen :game/guid)]
+                (let [response (parse-response (get-game-memo guid))]
+                  (or (= 0 (:number-of-total-results response))
+                      (= guid (:guid (:results response)))))))
+
+;; tested with seed 1651442293128 locally size 100
+;; we're going to keep size low so as to not blow up their endpoint.
+(tc/quick-check 10 guid-is-returned-prop)

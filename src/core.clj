@@ -2,6 +2,7 @@
   (:require [camel-snake-kebab.core :as csk]
             [clj-http.client :as client]
             [cheshire.core :as json]
+            [clojure.test :refer :all]
             [clojure.spec.alpha :as s]
             [clojure.spec.gen.alpha :as gen]
             [clojure.test.check :as tc]
@@ -9,24 +10,26 @@
             [orchestra.spec.test :as st]
             [clojure.test.check.properties :as prop :include-macros true]))
 
+;; https://www.giantbomb.com/forums/api-developers-3017/quick-start-guide-to-using-the-api-1427959/
+;; create an api key, and toss it into the root of this project
+
 (def api-key (slurp "api.key"))
 
 (s/def ::status-code #{1 100 101 102 103 104 105})
 (s/def ::error string?)
-(s/def ::number-of-total-results int?)
-(s/def ::number-of-page-results int?)
+(s/def ::number-of-total-results nat-int?)
+(s/def ::number-of-page-results nat-int?)
 (s/def ::limit int?)
 (s/def ::offset int?)
 (s/def ::results any?)
 
-;;todo: flush out these specs
-(s/def ::date-string string?) "2007-08-28"
-(s/def ::date-time-string string?) "2017-12-02 18:31:43"
-(s/def ::year-string string?)
-(s/def ::month-string string?)
+;; todo: flush out these specs, perhaps add java-time to validate them
+;; for now, this is fine. 
+(s/def ::date-string string?) ;;"2007-08-28"
+(s/def ::date-time-string string?) ;;"2017-12-02 18:31:43"
 
-;;todo: add generator?
-;;todo: this probably fails in a very ugly way, and needs a try around it
+;;todo: this probably fails in a very ugly way when given data of the wrong
+;;type and needs a try around it. 
 (s/def ::url #(uri? (new java.net.URI %)))
 
 (s/def ::api-detail-url ::url)
@@ -54,13 +57,10 @@
 
 ;; There's some inconsistency in the API here. Both original and original-url
 ;; lead to roughly the same endpoint and one is used in `images` and the other
-;; in `image`. Since I am working on limited data, I'm going to assume most
-;; these attributes are optional.
+;; in `image`. Having gone done the image size rabbit hole, I sense there are
+;; dragons, and this works for the 200 or so sampled games, and at least validates
+;; several of the (probably) common attributes. 
 
-;; Scratch that, we're going to need to investigate further. They're doing something
-;; silly using both the words `:image-tags` and `:tags`. I really want both these
-;; types to be the same, but perhaps they are different. *sigh* I'm going to hold
-;; out hope until I have tested another couple games. 
 (s/def ::image (s/keys :opt-un [:image/tags
                                 :image/image-tags
                                 :image/tiny-url
@@ -114,7 +114,7 @@
 ;;Franchises related to the game.
 (s/def :game/franchises (s/nilable (s/coll-of ::link)))
 ;;Genres that encompass the game.
-(s/def :game/genres (s/coll-of ::link)) ;;probably nilable
+(s/def :game/genres (s/coll-of ::link)) ;;is optional
 
 ;;For use in single item api call for game.
 ;;they might just be 4 digits + 4-5 digits, that's all i've observed (out of 4)
@@ -136,7 +136,7 @@
                                                     ::total])))
 
 ;;Characters killed in the game.
-(s/def :game/killed-characters (s/nilable (s/coll-of ::link))) ;;?? has not been observed
+(s/def :game/killed-characters (s/nilable (s/coll-of ::link)))
 ;;Locations related to the game.
 (s/def :game/locations (s/nilable (s/coll-of ::link)))
 ;;Name of the game.
@@ -156,16 +156,16 @@
 
 ;;Platforms the game appeared in.
 (s/def :platforms/abbreviation string?)
-(s/def :game/platforms (s/coll-of (s/keys :req-un [::api-detail-url
-                                                   ::id
-                                                   ::name
-                                                   ::site-detail-url
-                                                   :platforms/abbreviation])))
+(s/def :game/platforms (s/nilable (s/coll-of (s/keys :req-un [::api-detail-url
+                                                              ::id
+                                                              ::name
+                                                              ::site-detail-url
+                                                              :platforms/abbreviation]))))
 
 ;;Companies who published the game.
 (s/def :game/publishers (s/nilable (s/coll-of ::link)))
 ;;Releases of the game.
-(s/def :game/releases (s/coll-of ::link))
+(s/def :game/releases (s/coll-of ::link)) ;;is optional
 ;;Game DLCs
 (s/def :game/dlcs (s/coll-of string?))
 ;;Staff reviews of the game.
@@ -175,9 +175,9 @@
 ;;URL pointing to the game on Giant Bomb.
 (s/def :game/site-detail-url ::site-detail-url)
 ;;Themes that encompass the game.
-(s/def :game/themes (s/coll-of ::link))
+(s/def :game/themes (s/coll-of ::link)) ;;is optional
 ;;Videos associated to the game.
-(s/def :game/videos (s/nilable (s/coll-of any?))) ;;?? has not been observed
+(s/def :game/videos (s/nilable (s/coll-of ::link)))
 
 (s/def :game/results
   (s/or :empty empty?
@@ -193,7 +193,6 @@
                          :game/first-appearance-characters
                          :game/name
                          :game/deck
-                         :game/genres
                          :game/first-appearance-concepts
                          :game/videos
                          :game/publishers
@@ -221,7 +220,8 @@
                          :game/platforms
                          :game/guid]
                 :opt-un [:game/releases
-                         :game/themes])))
+                         :game/themes
+                         :game/genres])))
 
 (s/def ::game (s/keys :req-un [::status-code
                                ::error
@@ -230,8 +230,6 @@
                                ::limit
                                ::offset
                                :game/results]))
-
-{:error Object Not Found, :limit 0, :offset 0, :number-of-page-results 0, :number-of-total-results 0, :status-code 101, :results []}
 
 (s/fdef get-game :args (s/cat :guid :game/guid))
 
@@ -275,12 +273,21 @@
 
 (st/instrument)
 
+;; This test really isn't doing much, but neither is the endpoint we're testing, since it
+;; only really has that one option, and the rest are more about the shape of the output.
+;; However, it'll have to do, and at least it exercises our specs! 
+
 (def guid-is-returned-prop
   (prop/for-all [guid (s/gen :game/guid)]
                 (let [response (parse-response (get-game-memo guid))]
                   (or (= 0 (:number-of-total-results response))
                       (= guid (:guid (:results response)))))))
 
-;; tested with seed 1651442293128 locally size 100
-;; we're going to keep size low so as to not blow up their endpoint.
-(tc/quick-check 10 guid-is-returned-prop)
+;; Tested with seed 1651442293128 locally size 200, I wouldn't be shocked if there were more
+;; optional or nilable categories. That's what most the issues have been.
+;;
+;; We're going to keep size low so as to not blow up their endpoint.
+
+(deftest guid-is-returned-test
+  (tc/quick-check 10 #_200 guid-is-returned-prop #_#_:seed 1651442293128))
+

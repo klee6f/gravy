@@ -24,7 +24,7 @@ Don't hesitate to reach out with any questions. Remember we are more focused on 
 
 
 
-###To run:
+### To run:
 
 Add a file named `api.key` to the root of this project containing your api key. One can be found here:
 https://www.giantbomb.com/forums/api-developers-3017/quick-start-guide-to-using-the-api-1427959/

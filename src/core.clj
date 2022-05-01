@@ -2,13 +2,9 @@
   (:require [camel-snake-kebab.core :as csk]
             [clj-http.client :as client]
             [cheshire.core :as json]
-            [clojure.test :refer :all]
             [clojure.spec.alpha :as s]
             [clojure.spec.gen.alpha :as gen]
-            [clojure.test.check :as tc]
-            [clojure.test.check.generators :as tcgen]
-            [orchestra.spec.test :as st]
-            [clojure.test.check.properties :as prop :include-macros true]))
+            [clojure.test.check.generators :as tcgen]))
 
 ;; https://www.giantbomb.com/forums/api-developers-3017/quick-start-guide-to-using-the-api-1427959/
 ;; create an api key, and toss it into the root of this project
@@ -234,19 +230,13 @@
 (s/fdef get-game :args (s/cat :guid :game/guid))
 
 (defn get-game [guid]
-  (println "getting: " guid)
   (client/get (format "http://www.giantbomb.com/api/game/%s/" guid)
-              {#_#_:debug true
-               :headers {"User-Agent" "Kayla's testing bot"}
+              {:headers {"User-Agent" "Kayla's testing bot"}
                :query-params {"api_key" api-key
                               "format" "json"}
                :throw-entire-message? true}))
 
-;; lets not get rate limited, their docs said something like 200 requests per hour and
-;; we're going to be SUPER respectful of that, since generative testing could very easily
-;; surpass that, and ideally should if we were being sort of thorough, but this is more a
-;; proof of concept than a genuine bonified attempt to test their endpoint.
-
+;; use memoized version for doing repl work without getting rate limited
 (def get-game-memo (memoize get-game))
 
 (s/fdef parse-response :ret ::game)
@@ -255,39 +245,4 @@
   (-> response
       :body
       (json/parse-string csk/->kebab-case-keyword)))
-
-;; manual test games
-(def game-ids ["3030-4725"
-               "3030-20645"
-               "3030-30057"
-               "3030-44272"
-               "3030-43393"
-               "3030-68921"
-               "3030-18741"
-               "3030-20232"
-               "3030-19783"
-               "3030-69447"
-               "3030-20815"
-               "3030-22195"
-               "3030-1539"])
-
-(st/instrument)
-
-;; This test really isn't doing much, but neither is the endpoint we're testing, since it
-;; only really has that one option, and the rest are more about the shape of the output.
-;; However, it'll have to do, and at least it exercises our specs! 
-
-(def guid-is-returned-prop
-  (prop/for-all [guid (s/gen :game/guid)]
-                (let [response (parse-response (get-game-memo guid))]
-                  (or (= 0 (:number-of-total-results response))
-                      (= guid (:guid (:results response)))))))
-
-;; Tested with seed 1651442293128 locally size 200, I wouldn't be shocked if there were more
-;; optional or nilable categories. That's what most the issues have been.
-;;
-;; We're going to keep size low so as to not blow up their endpoint.
-
-(deftest guid-is-returned-test
-  (tc/quick-check 10 #_200 guid-is-returned-prop #_#_:seed 1651442293128))
 

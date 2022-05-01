@@ -19,3 +19,22 @@ You can find a full list of API features here.
 
 Questions
 Don't hesitate to reach out with any questions. Remember we are more focused on seeing your development process than checking off a list of requirements, so be sure you are able to speak to your code and your thoughts behind it.
+
+
+
+
+
+###To run:
+
+Add a file named `api.key` to the root of this project containing your api key. One can be found here:
+https://www.giantbomb.com/forums/api-developers-3017/quick-start-guide-to-using-the-api-1427959/
+
+This project is meant to input/output test the giantbomb api against clojure spec. It currently only
+tests the /game part of their endpoint, and is more of a proof of concept. It has only been run 200
+or so times against their data because they have a warning asking people to kindly not scrape them,
+so what this project lacks in robustness it makes up for with not having angered giantbomb. Currently
+the test is configured to hit their endpoint just 10 times, you can uncomment the 200 in source and 
+test things more thoroughly, but you probably shouldn't do that more than once. I recommend setting a
+seed. 
+
+Run testing via: `clj -X:test`

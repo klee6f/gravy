@@ -1,5 +1,6 @@
 (ns core-test
-  (:require [core :refer :all]
+  (:require [request :refer :all]
+            [response :refer :all]
             [clojure.test :refer :all]
             [clojure.spec.alpha :as s]
             [clojure.test.check :as tc]
@@ -14,7 +15,10 @@
 
 (def guid-is-returned-prop
   (prop/for-all [guid (s/gen :game/guid)]
-                (let [response (parse-response (get-game-memo guid))]
+                (let [game-response (-> guid
+                                        request/get-game
+                                        response/parse-game-response)
+                      games-response (response/parse-games-response)]
                   (or (= 0 (:number-of-total-results response))
                       (= guid (:guid (:results response)))))))
 
@@ -26,3 +30,26 @@
 (deftest guid-is-returned-test
   (tc/quick-check 10 #_200 guid-is-returned-prop #_#_:seed 1651442293128))
 
+(def search-finds-existing-games
+  (prop/for-all [guid (s/gen :game/guid)]
+                (let [response (parse-response (get-game-memo guid))]
+                  )))
+
+
+
+
+
+
+
+
+(comment
+
+  (def rimworld (response/parse-game-response (request/get-game "3030-44272")))
+
+  (def temp (reguest/get-games {:filter (select-keys (:results rimworld) [:name])}))
+
+  (def rimworld-games (response/parse-games-response temp))
+
+  (count (:results (response/parse-response temp)))
+
+  (:original-release-date (:results (response/parse-response temp))))

@@ -1,7 +1,8 @@
 (ns game
-    (:require [specs :refer :all][clojure.spec.alpha :as s]
-              [clojure.spec.gen.alpha :as gen]
-              [clojure.test.check.generators :as tcgen]))
+  (:require [specs]
+            [clojure.spec.alpha :as s]
+            [clojure.spec.gen.alpha :as gen]
+            [clojure.test.check.generators :as tcgen]))
 
 ;;List of aliases the game is known by. A \n (newline) seperates each alias.
 (s/def ::aliases (s/nilable string?))
@@ -12,9 +13,9 @@
 ;;Concepts related to the game.
 (s/def ::concepts (s/nilable (s/coll-of :specs/link)))
 ;;Date the game was added to Giant Bomb.
-(s/def ::date-added :specs/date-time-string)
+(s/def ::date-added :specs/date-time)
 ;;Date the game was last updated on Giant Bomb.
-(s/def ::date-last-updated :specs/date-time-string) 
+(s/def ::date-last-updated :specs/date-time) 
 ;;Brief summary of the game.
 (s/def ::deck (s/nilable string?))
 ;;Description of the game.
@@ -48,7 +49,7 @@
 ;;it very likely goes higher than 70000, i'm just not sure how much higher. Also I am not certain
 ;;about the completeness, but we'll find out soon enough
 (s/def ::guid (s/with-gen #(re-matches #"3030-\d+" %)
-                    #(tcgen/no-shrink (gen/fmap (partial str "3030-") (gen/large-integer* {:min 1 :max 70000})))))
+                #(tcgen/no-shrink (gen/fmap (partial str "3030-") (gen/choose 1 70000)))))
 
 ;;Unique ID of the game.
 (s/def ::id :specs/id)
@@ -77,7 +78,7 @@
                                                                          :specs/id
                                                                          :specs/name]))))
 ;;Date the game was first released.
-(s/def ::original-release-date (s/nilable :specs/date-string))
+(s/def ::original-release-date (s/nilable :specs/date))
 ;;People who have worked with the game.
 (s/def ::people (s/nilable (s/coll-of :specs/link)))
 
@@ -106,7 +107,7 @@
 ;;Videos associated to the game.
 (s/def ::videos (s/nilable (s/coll-of :specs/link)))
 
-(s/def ::result
+(s/def ::results
   (s/or :empty empty?
         :not-empty
         (s/keys :req-un [::description

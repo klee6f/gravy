@@ -1,24 +1,20 @@
 (ns specs
-  (:require [clojure.spec.alpha :as s]
-            [clojure.spec.gen.alpha :as gen]
-            [clojure.test.check.generators :as tcgen]))
+  (:require [java-time :as t]
+            [clojure.spec.alpha :as s]))
 
-(s/def ::status-code #{1 100 101 102 103 104 105})
-(s/def ::error string?)
-(s/def ::number-of-total-results nat-int?)
-(s/def ::number-of-page-results nat-int?)
-(s/def ::limit int?)
-(s/def ::offset int?)
-(s/def ::results any?)
+(s/def ::date-string
+  #(try (t/local-date %)
+        (catch Exception e false)))
 
-;; todo: flush out these specs, perhaps add java-time to validate them
-;; for now, this is fine. 
-(s/def ::date-string string?) ;;"2007-08-28"
-(s/def ::date-time-string string?) ;;"2017-12-02 18:31:43"
+(s/def ::date-time-string
+  #(try (t/local-date %)
+        (catch Exception e false)))
 
-;;todo: this probably fails in a very ugly way when given data of the wrong
-;;type and needs a try around it. 
-(s/def ::url #(uri? (new java.net.URI %)))
+(s/def ::date t/local-date?)
+(s/def ::date-time t/local-date-time?)
+
+(s/def ::url #(try (uri? (new java.net.URI %))
+                   (catch Exception e false)))
 
 (s/def ::api-detail-url ::url)
 (s/def ::id pos-int?)
@@ -61,14 +57,3 @@
                                 :image/medium-url
                                 :image/small-url
                                 :image/thumb-url]))
-
-
-
-
-(s/def ::game (s/keys :req-un [::status-code
-                               ::error
-                               ::number-of-total-results
-                               ::number-of-page-results
-                               ::limit
-                               ::offset
-                               :game/result]))

@@ -51,7 +51,7 @@
       parse-response
       (update :results parse-dates)))
 
-(s/fdef parse-response :ret ::games)
+(s/fdef parse-games-response :ret ::games)
 
 (defn parse-games-response [response]
   (-> response

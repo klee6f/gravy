@@ -7,7 +7,7 @@
 ;;List of aliases the game is known by. A \n (newline) seperates each alias.
 (s/def ::aliases (s/nilable string?))
 ;;URL pointing to the game detail resource.
-(s/def ::api-details-url :specs/api-detail-url)
+(s/def ::api-detail-url :specs/api-detail-url)
 ;;Characters related to the game.
 (s/def ::characters (s/nilable (s/coll-of :specs/link)))
 ;;Concepts related to the game.

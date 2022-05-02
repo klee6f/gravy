@@ -20,8 +20,8 @@
                 (let [game-response (-> guid
                                         request/get-game
                                         response/parse-game-response)]
-                  (or (= 0 (:number-of-total-results game-response))
-                      (= guid (:guid (:results game-response)))))))
+                  (is (or (= 0 (:number-of-total-results game-response))
+                          (= guid (:guid (:results game-response))))))))
 
 ;; Tested with seed 1651442293128 locally size 200, I wouldn't be shocked if there were more
 ;; optional or nilable categories. That's what most the issues have been.
@@ -29,9 +29,7 @@
 ;; We're going to keep size low so as to not blow up their endpoint.
 
 (deftest guid-is-returned-test
-  (tc/quick-check 10 guid-is-returned-prop #_#_:seed 1651442293128))
-
-#_(guid-is-returned-test)
+  (tc/quick-check 100 guid-is-returned-prop))
 
 (def search-finds-existing-games-prop
   (prop/for-all
@@ -45,20 +43,18 @@
              (hash-map :filters)
              request/get-games
              response/parse-games-response)]
-     (or (< 99 (count results))
-         (some #{guid} (map :guid results))))))
+     (is (or (< 99 (count results))
+             (some #{guid} (map :guid results)))))))
 
 (deftest search-finds-existing-games-test
-  (tc/quick-check 10 #_200 search-finds-existing-games-prop #_#_:seed 1651442293128))
-
-#_(search-finds-existing-games-test)
-
-
+  (tc/quick-check 100 search-finds-existing-games-prop))
 
 
 
 
 (comment
+  (guid-is-returned-test)
+  (search-finds-existing-games-test)
 
   (def rimworld (response/parse-game-response (request/get-game "3030-44272")))
 

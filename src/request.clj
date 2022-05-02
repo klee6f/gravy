@@ -18,9 +18,7 @@
   (client/get (format "http://www.giantbomb.com/api/game/%s/" guid)
                 {:headers {"User-Agent" "Kayla's testing bot"}
                  :query-params {"format" "json"
-                                "api_key" api-key}
-                 #_#_#_#_:debug true
-                 :throw-entire-message? true}))
+                                "api_key" api-key}}))
 
 (s/fdef get-games
   :args (s/cat :opts (s/keys :opt-un [:games/filter])))
